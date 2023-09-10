@@ -12,6 +12,8 @@ from envs import *
 from kivycalendar import CalendarWidget
 from utils import *
 
+from collections import defaultdict
+
 
 def attempt_connect_or_init():
     connection_failed = False
@@ -128,11 +130,30 @@ class UpcomingTasksScreen(Screen):
 
     def go_to_menu(self, instance):
         self.manager.current = 'menu'
+    
+    def pull_task_info(self):
+        conn, cursor = attempt_connect_or_init()
+        task_rows = query_table(cursor, BABEANIE_SCHEMA, TABLE_NAME)
+        task_rows = [{
+            'task_name': row[0], 
+            'task_type': row[1], 
+            'task_description': row[2], 
+            'frequency_type': row[3], 
+            'at_month': row[4], 
+            'at_week': row[5], 
+            'at_day': row[6], 
+            'at_hour': row[7], 
+        } for row in task_rows]
+
+        return task_rows
+        # TODO: Close connection on screen exit
 
     def generate_buttons(self):
         # Generate buttons dynamically
         layout = BoxLayout(orientation='vertical')
         button_list = []
+        task_rows = self.pull_task_info()
+        print(task_rows)
 
         # Create a ScrollView to contain the buttons
         scroll_view = ScrollView()
@@ -143,8 +164,9 @@ class UpcomingTasksScreen(Screen):
         task_list_label = Label(text='Upcoming Tasks', font_size=20, size_hint=(1, 0.2))
         layout.add_widget(task_list_label)
 
-        for i in range(1, 21):  # Generate 20 buttons (example with more buttons)
-            button = Button(text=f"Button {i}", size_hint_y=None, height=50)
+        for task_dict in task_rows:
+            button_text = f"{task_dict['task_type']}: {task_dict['task_name']} at ___"
+            button = Button(text=button_text, size_hint_y=None, height=50)
             button.bind(on_release=self.button_callback)
             button_list.append(button)
             buttons_container.add_widget(button)
@@ -158,23 +180,125 @@ class UpcomingTasksScreen(Screen):
 
         return layout
 
+    # def generate_buttons(self):
+    #     # Generate buttons dynamically
+    #     layout = BoxLayout(orientation='vertical')
+    #     button_list = []
+    #     task_rows = self.pull_task_info()
+
+    #     # Create a ScrollView to contain the buttons
+    #     scroll_view = ScrollView()
+
+    #     buttons_container = BoxLayout(orientation='vertical', size_hint_y=None, spacing=10)
+    #     buttons_container.bind(minimum_height=buttons_container.setter('height'))
+
+    #     task_list_label = Label(text='Upcoming Tasks', font_size=20, size_hint=(1, 0.2))
+    #     layout.add_widget(task_list_label)
+
+    #     for task_dict in task_rows:
+    #         button_text = f"{task_dict['task_type']}: {task_dict['task_name']} at ___"
+    #         button = Button(text=button_text, size_hint_y=None, height=50)
+    #         button.bind(on_release=self.button_callback)
+    #         button_list.append(button)
+    #         buttons_container.add_widget(button)
+
+    #         # Add a label between buttons
+    #         label = Label(text='|', size_hint=(None, None), size=(10, 50))
+    #         buttons_container.add_widget(label)
+
+    #     scroll_view.add_widget(buttons_container)
+    #     layout.add_widget(scroll_view)
+
+    #     back_button = Button(text='Back', size_hint=(None, None), size=(200, 50))
+    #     back_button.bind(on_release=self.go_to_menu)
+    #     layout.add_widget(back_button)
+
+    #     return layout
+
     def button_callback(self, instance):
         # Define the callback function for button click
         print(f"Button clicked: {instance.text}")
 
 class EditTasksScreen(Screen):
-    # Categorize tasks for easier edits
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        layout = BoxLayout(orientation='vertical')
-        self.add_widget(Label(text='babeanie', font_size=40))
+        # self.task_list_label = Label(text='Upcoming Tasks', font_size=20, size_hint=(1, 0.2))
         back_button = Button(text='Back', size_hint=(None, None), size=(200, 50))
         back_button.bind(on_release=self.go_to_menu)
-        layout.add_widget(back_button)
-        self.add_widget(layout)
+        self.layout = None  # Initialize the layout as None
+        self.button_list = []  # Initialize an empty list for buttons
+
+    def on_enter(self):
+        # This method is called when the screen is displayed
+        self.layout = self.generate_buttons()
+        self.add_widget(self.layout)
+
+    def on_leave(self):
+        # This method is called when the screen is left
+        self.remove_widget(self.layout)
 
     def go_to_menu(self, instance):
         self.manager.current = 'menu'
+    
+    def pull_task_info(self):
+        conn, cursor = attempt_connect_or_init()
+        task_rows = query_table(cursor, BABEANIE_SCHEMA, TABLE_NAME)
+        task_rows = [{
+            'task_name': row[0], 
+            'task_type': row[1], 
+            'task_description': row[2], 
+            'frequency_type': row[3], 
+            'at_month': row[4], 
+            'at_week': row[5], 
+            'at_day': row[6], 
+            'at_hour': row[7], 
+        } for row in task_rows]
+
+        grouped_data = defaultdict(list)
+        for item in task_rows:
+            key_value = item['task_type']
+            grouped_data[key_value].append(item)
+        result = dict(grouped_data)
+        return result
+        # TODO: Close connection on screen exit
+
+    def generate_buttons(self):
+        # Generate buttons dynamically
+        layout = BoxLayout(orientation='vertical')
+        button_list = []
+        task_rows = self.pull_task_info()
+
+        # Create a ScrollView to contain the buttons
+        scroll_view = ScrollView()
+
+        buttons_container = BoxLayout(orientation='vertical', size_hint_y=None, spacing=10)
+        buttons_container.bind(minimum_height=buttons_container.setter('height'))
+
+        task_list_label = Label(text='Upcoming Tasks', font_size=20, size_hint=(1, 0.2))
+        layout.add_widget(task_list_label)
+
+        for task_dict_key in list(task_rows):
+            label = Label(text=task_dict_key, size_hint=(0.5, None), size=(10, 50))
+            buttons_container.add_widget(label)
+            for task_dict in task_rows[task_dict_key]:
+                button_text = f"{task_dict['task_name']} at THIS FREQUENCY"
+                button = Button(text=button_text, size_hint_y=None, height=50)
+                button.bind(on_release=self.button_callback)
+                button_list.append(button)
+                buttons_container.add_widget(button)
+
+        scroll_view.add_widget(buttons_container)
+        layout.add_widget(scroll_view)
+
+        back_button = Button(text='Back', size_hint=(None, None), size=(200, 50))
+        back_button.bind(on_release=self.go_to_menu)
+        layout.add_widget(back_button)
+
+        return layout
+
+    def button_callback(self, instance):
+        # Define the callback function for button click
+        print(f"Button clicked: {instance.text}")
 
 class MyApp(App):
     def build(self):
